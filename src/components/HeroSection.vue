@@ -63,6 +63,13 @@ const goToSlide = (index) => {
   currentIndex.value = index
 }
 
+const scrollToSection = (id) => {
+  const el = document.getElementById(id)
+  if (el) {
+    el.scrollIntoView({ behavior: 'smooth' })
+  }
+}
+
 onMounted(() => {
   autoSlideInterval = setInterval(nextSlide, 6000)
 })
@@ -84,8 +91,8 @@ onUnmounted(() => {
               <h1>{{ banner.title }}</h1>
               <p>{{ banner.desc }}</p>
               <div class="buttons-left">
-                <button class="btn-primary">Pesan Sekarang</button>
-                <button class="btn-secondary">Lihat Produk</button>
+                <button class="btn-primary" @click="scrollToSection('katalog-produk')">Pesan Sekarang</button>
+                <button class="btn-secondary" @click="scrollToSection('katalog-produk')">Lihat Produk</button>
               </div>
             </div>
 
