@@ -1,7 +1,27 @@
 <script setup>
+import { ref } from 'vue'
+
 defineOptions({
   name: 'AppFooter'
 })
+
+const newsletterEmail = ref('')
+const subscribed = ref(false)
+
+// accordion untuk kolom Menu & Informasi di tampilan mobile
+const openCol = ref(null)
+const toggleCol = (name) => {
+  if (window.innerWidth > 576) return // di desktop selalu terbuka, gak perlu accordion
+  openCol.value = openCol.value === name ? null : name
+}
+
+const subscribe = () => {
+  if (!newsletterEmail.value) return
+  // TODO: sambungkan ke endpoint/store subscribe sungguhan
+  subscribed.value = true
+  newsletterEmail.value = ''
+  setTimeout(() => (subscribed.value = false), 3500)
+}
 </script>
 
 <template>
@@ -34,26 +54,26 @@ defineOptions({
         </div>
 
         <!-- Nav Links -->
-        <div class="footer-col">
-          <h4 class="footer-col-title">Menu</h4>
+        <div class="footer-col" :class="{ open: openCol === 'menu' }">
+          <h4 class="footer-col-title" @click="toggleCol('menu')">Menu</h4>
           <ul class="footer-links">
-            <li><a href="#">Beranda</a></li>
-            <li><a href="#">Kategori</a></li>
-            <li><a href="#">Produk</a></li>
-            <li><a href="#">Promo</a></li>
-            <li><a href="#">Tentang Kami</a></li>
+            <li><RouterLink to="/">Beranda</RouterLink></li>
+            <li><a href="#kategori" @click.prevent="$router.push('/').then(() => document.getElementById('kategori')?.scrollIntoView({behavior:'smooth'}))">Kategori</a></li>
+            <li><a href="#katalog-produk" @click.prevent="$router.push('/').then(() => document.getElementById('katalog-produk')?.scrollIntoView({behavior:'smooth'}))">Produk</a></li>
+            <li><a href="#promo" @click.prevent="$router.push('/').then(() => document.getElementById('promo')?.scrollIntoView({behavior:'smooth'}))">Promo</a></li>
+            <li><RouterLink to="/tentang-kami">Tentang Kami</RouterLink></li>
           </ul>
         </div>
 
         <!-- Info -->
-        <div class="footer-col">
-          <h4 class="footer-col-title">Informasi</h4>
+        <div class="footer-col" :class="{ open: openCol === 'informasi' }">
+          <h4 class="footer-col-title" @click="toggleCol('informasi')">Informasi</h4>
           <ul class="footer-links">
-            <li><a href="#">Cara Pemesanan</a></li>
-            <li><a href="#">Kebijakan Privasi</a></li>
-            <li><a href="#">Syarat & Ketentuan</a></li>
-            <li><a href="#">FAQ</a></li>
-            <li><a href="#">Hubungi Kami</a></li>
+            <li><RouterLink to="/cara-pemesanan">Cara Pemesanan</RouterLink></li>
+            <li><RouterLink to="/kebijakan-privasi">Kebijakan Privasi</RouterLink></li>
+            <li><RouterLink to="/syarat-ketentuan">Syarat & Ketentuan</RouterLink></li>
+            <li><RouterLink to="/faq">FAQ</RouterLink></li>
+            <li><RouterLink to="/hubungi-kami">Hubungi Kami</RouterLink></li>
           </ul>
         </div>
 
@@ -61,10 +81,11 @@ defineOptions({
         <div class="footer-col footer-col-wide">
           <h4 class="footer-col-title">Dapatkan Info Promo</h4>
           <p class="footer-col-desc">Daftar sekarang dan dapatkan notifikasi promo terbaru langsung di inbox kamu.</p>
-          <div class="subscribe-form">
-            <input type="email" placeholder="email@kamu.com" />
-            <button>Daftar</button>
-          </div>
+          <form class="subscribe-form" @submit.prevent="subscribe">
+            <input type="email" v-model="newsletterEmail" placeholder="email@kamu.com" required />
+            <button type="submit">Daftar</button>
+          </form>
+          <p v-if="subscribed" class="subscribe-success">✓ Berhasil berlangganan!</p>
           <div class="contact-info">
             <div class="contact-item">
               <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.4 2 2 0 0 1 3.58 1h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 8.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
@@ -83,9 +104,9 @@ defineOptions({
       <div class="footer-bottom">
         <p>&copy; 2026 Toko Kelontong Online. All rights reserved.</p>
         <div class="footer-bottom-links">
-          <a href="#">Privasi</a>
+          <RouterLink to="/kebijakan-privasi">Privasi</RouterLink>
           <span class="sep">·</span>
-          <a href="#">Ketentuan</a>
+          <RouterLink to="/syarat-ketentuan">Ketentuan</RouterLink>
           <span class="sep">·</span>
           <a href="#">Cookie</a>
         </div>
@@ -168,6 +189,7 @@ defineOptions({
   letter-spacing: 0.1em;
   text-transform: uppercase;
   margin-bottom: 1.4rem;
+  user-select: none;
 }
 
 .footer-links {
@@ -240,6 +262,13 @@ defineOptions({
 
 .subscribe-form button:hover {
   background-color: #ca8a04;
+}
+
+.subscribe-success {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #4ade80;
+  margin: -0.9rem 0 1.4rem;
 }
 
 .contact-info {
@@ -318,29 +347,77 @@ defineOptions({
 
   .footer-top {
     grid-template-columns: 1fr;
-    gap: 2.25rem;
-    padding-bottom: 2.5rem;
+    gap: 0;
+    padding-bottom: 1.5rem;
   }
 
   .footer-brand {
-    text-align: center;
+    text-align: left;
+    margin-bottom: 2rem;
   }
 
   .footer-tagline {
-    margin-left: auto;
-    margin-right: auto;
+    margin-left: 0;
+    margin-right: 0;
+    max-width: 100%;
   }
 
   .social-links {
-    justify-content: center;
+    justify-content: flex-start;
   }
 
+  /* kolom menu/informasi jadi accordion collapsible */
   .footer-col {
-    text-align: center;
+    text-align: left;
+    border-top: 1px solid #1e293b;
+    padding: 1.15rem 0;
+  }
+
+  .footer-col-wide {
+    border-bottom: 1px solid #1e293b;
+    padding-bottom: 1.75rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .footer-col-title {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 0;
+    cursor: pointer;
+  }
+
+  .footer-col-title::after {
+    content: '+';
+    font-size: 1.1rem;
+    font-weight: 400;
+    color: #64748b;
+  }
+
+  .footer-col.open .footer-col-title::after {
+    content: '−';
   }
 
   .footer-links {
-    align-items: center;
+    align-items: flex-start;
+    max-height: 0;
+    overflow: hidden;
+    gap: 0;
+    margin-top: 0;
+    transition: max-height 0.3s ease;
+  }
+
+  .footer-col.open .footer-links {
+    max-height: 400px;
+    margin-top: 1.1rem;
+  }
+
+  .footer-links li {
+    padding: 0.35rem 0;
+  }
+
+  .footer-col-wide .footer-col-title::after {
+    content: '';
   }
 
   .subscribe-form {
@@ -354,13 +431,14 @@ defineOptions({
   }
 
   .contact-info {
-    align-items: center;
+    align-items: flex-start;
   }
 
   .footer-bottom {
     flex-direction: column;
     gap: 0.75rem;
-    text-align: center;
+    text-align: left;
+    align-items: flex-start;
     padding: 1.5rem 0;
   }
 }

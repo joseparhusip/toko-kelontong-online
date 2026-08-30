@@ -3,6 +3,7 @@ import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { useCartStore } from '../stores/useCartStore'
 import { useOrderStore } from '../stores/useOrderStore'
+import { usePromoSignal } from '../stores/usePromoSignal'
 
 defineOptions({
   name: 'AppNavbar'
@@ -10,6 +11,7 @@ defineOptions({
 
 const cartStore = useCartStore()
 const orderStore = useOrderStore()
+const promoSignal = usePromoSignal()
 const router = useRouter()
 
 const isScrolled = ref(false)
@@ -209,6 +211,32 @@ watch(
   () => cartStore.items.length,
   (len) => {
     if (len === 0) removePromo()
+  }
+)
+
+// ========= DENGERIN SINYAL DARI PROMO BANNER (di luar Navbar) =========
+// PromoBanner.vue gak punya akses ke state promo di sini, jadi dia cuma
+// "teriak" lewat usePromoSignal store: "tolong apply kode X". Navbar yang
+// pegang kendali penuh atas promo & cart yang jalanin prosesnya di sini,
+// pakai fungsi-fungsi yang sudah ada (openCart, selectPromo).
+watch(
+  () => promoSignal.requestedCode,
+  (code) => {
+    if (!code) return
+
+    const found = promoCodes.find((p) => p.code === code)
+
+    openCart()
+
+    if (found) {
+      selectPromo(found)
+    } else {
+      // Kode dari banner gak ketemu di daftar -> tetap buka cart,
+      // biar user bisa cek/isi manual sendiri.
+      console.warn(`Kode promo "${code}" dari PromoBanner tidak ditemukan di daftar promoCodes.`)
+    }
+
+    promoSignal.clear()
   }
 )
 // =======================================================

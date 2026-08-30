@@ -1,5 +1,22 @@
 <script setup>
 // Komponen banner promosi dengan desain modern
+import { usePromoSignal } from '../stores/usePromoSignal'
+
+const promoSignal = usePromoSignal()
+
+// Kode ini HARUS sama persis dengan salah satu kode di array `promoCodes`
+// yang ada di Navbar.vue. Banner ini mempromosikan diskon 20%, jadi
+// dipasangkan ke kode 'Toko Kelontong 20' (diskon 20%).
+const PROMO_CODE = 'Toko Kelontong 20'
+
+const handleClaimVoucher = () => {
+  // Scroll ke atas dulu biar navbar/cart modal kelihatan jelas
+  // sebelum modal keranjang muncul (terutama kalau user lagi scroll jauh).
+  window.scrollTo({ top: 0, behavior: 'smooth' })
+
+  // Kirim sinyal ke Navbar: "tolong apply kode ini & buka cart"
+  promoSignal.request(PROMO_CODE)
+}
 </script>
 
 <template>
@@ -9,7 +26,7 @@
         <span class="promo-tag">✦ Penawaran Terbatas</span>
         <h2>Dapatkan Diskon 20% Untuk Belanjaan Pertama Anda</h2>
         <p class="promo-sub">Gunakan kode voucher saat checkout. Berlaku untuk semua kategori produk.</p>
-        <button class="btn-promo">Klaim Voucher Sekarang →</button>
+        <button class="btn-promo" @click="handleClaimVoucher">Klaim Voucher Sekarang</button>
       </div>
       <div class="promo-image-wrapper">
         <img src="/banners/promo-banner.jpeg" alt="Voucher Promo" class="promo-image" />
