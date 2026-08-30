@@ -432,12 +432,21 @@ onUnmounted(() => {
 
     <transition name="mobile-menu">
       <div v-if="isMenuOpen" class="mobile-menu">
+        <span class="mobile-menu-brand">Toko Kelontong</span>
+
         <ul class="mobile-nav-links">
           <li><a href="#" @click.prevent="scrollToSection('beranda')">Beranda</a></li>
           <li><a href="#" @click.prevent="scrollToSection('kategori')">Kategori</a></li>
           <li><a href="#" @click.prevent="scrollToSection('katalog-produk')">Produk</a></li>
           <li><a href="#" @click.prevent="scrollToSection('promo')">Promo</a></li>
         </ul>
+
+        <button class="mobile-menu-cta" @click="scrollToSection('katalog-produk')">
+          Belanja Sekarang
+        </button>
+
+        <div class="mobile-menu-divider"></div>
+
         <button class="btn-riwayat mobile-btn-riwayat" @click="goToRiwayat">
           <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
             <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
@@ -674,6 +683,16 @@ onUnmounted(() => {
   box-shadow: 0 8px 32px -4px rgba(0, 0, 0, 0.12), 0 0 0 1px rgba(0,0,0,0.04);
 }
 
+/* FIX: navbar defaultnya transparent, jadi tanpa ini overlay gelap di
+   belakang bakal "keliatan tembus" persis di area logo & tombol hamburger
+   (bikin keduanya kelihatan pudar/abu-abu). Begitu menu dibuka, kasih
+   navbar latar solid biar logo & ikon X tetap kebaca jelas. */
+.navbar.menu-open:not(.scrolled) {
+  background-color: var(--kk-paper);
+  border-radius: 1.5rem;
+  box-shadow: 0 8px 32px -4px rgba(0, 0, 0, 0.12);
+}
+
 .logo-img {
   height: 52px;
   width: auto;
@@ -844,27 +863,36 @@ onUnmounted(() => {
   opacity: 0;
 }
 
-/* MOBILE DROPDOWN MENU */
+/* MOBILE DROPDOWN MENU — satu kartu utuh, senada sama warna navbar */
 .mobile-menu {
   position: absolute;
   top: calc(100% + 0.75rem);
   left: 0;
   right: 0;
-  background-color: #ffffff;
+  z-index: 100;
+  background-color: var(--kk-ink);
+  color: var(--kk-paper);
   border-radius: 1.25rem;
-  box-shadow: 0 16px 40px -8px rgba(0, 0, 0, 0.18);
+  box-shadow: 0 16px 40px -8px rgba(0, 0, 0, 0.28);
   padding: 1.25rem;
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
-  z-index: 100;
+}
+
+.mobile-menu-brand {
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-weight: 800;
+  font-size: 1.05rem;
+  color: var(--kk-paper);
+  margin-bottom: 0.15rem;
 }
 
 .mobile-nav-links {
   list-style: none;
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: 0.15rem;
   margin: 0;
   padding: 0;
 }
@@ -872,27 +900,69 @@ onUnmounted(() => {
 .mobile-nav-links a {
   display: block;
   text-decoration: none;
-  color: #374151;
-  font-weight: 600;
+  color: var(--kk-paper);
+  font-weight: 700;
   font-size: 1rem;
-  padding: 0.85rem 0.5rem;
+  padding: 0.8rem 0.6rem;
   border-radius: 0.75rem;
   transition: background-color 0.2s, color 0.2s;
 }
 
 .mobile-nav-links a:hover {
-  background-color: #fef9c3;
-  color: #ca8a04;
+  background-color: rgba(251, 243, 226, 0.12);
+  color: var(--kk-mustard-soft);
 }
 
+.mobile-menu-cta {
+  width: 100%;
+  border: none;
+  border-radius: 999px;
+  background-color: var(--kk-mustard);
+  color: #fffaf0;
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-weight: 700;
+  font-size: 0.92rem;
+  padding: 0.85rem 1.5rem;
+  cursor: pointer;
+  transition: background-color 0.2s ease, transform 0.15s ease;
+  box-shadow: inset 0 -3px 0 rgba(0, 0, 0, 0.18);
+}
+
+.mobile-menu-cta:hover {
+  background-color: var(--kk-mustard-dark);
+}
+
+.mobile-menu-cta:active {
+  transform: translateY(1px);
+}
+
+.mobile-menu-divider {
+  height: 1px;
+  background-color: rgba(251, 243, 226, 0.16);
+  margin: 0.15rem 0 0.1rem;
+}
+
+/* Tombol riwayat & keranjang menyatu dengan tema gelap kartu */
 .mobile-btn-riwayat {
   width: 100%;
   justify-content: center;
+  border-radius: 999px;
+  background-color: transparent;
+  border: 1.5px solid rgba(251, 243, 226, 0.35);
+  color: var(--kk-paper);
+}
+
+.mobile-btn-riwayat:hover {
+  background-color: rgba(251, 243, 226, 0.1);
+  border-color: var(--kk-mustard-soft);
+  color: var(--kk-mustard-soft);
+  transform: none;
 }
 
 .mobile-btn-cart {
   width: 100%;
   justify-content: center;
+  border-radius: 999px;
 }
 
 .mobile-menu-enter-active,
