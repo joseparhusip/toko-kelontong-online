@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, onUnmounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { useCartStore } from '../stores/useCartStore'
 import { useOrderStore } from '../stores/useOrderStore'
@@ -58,6 +58,7 @@ const openCart = () => {
 
 const closeCart = () => {
   isCartOpen.value = false
+  showPromoList.value = false
 }
 
 const goToRiwayat = () => {
@@ -78,6 +79,140 @@ const handleRemove = (productId) => {
   cartStore.removeItem(productId)
 }
 
+// ================= FUNGSI KODE PROMO =================
+const promoCodes = [
+  { code: 'Toko Kelontong 15', discount: 15 },
+  { code: 'Toko Kelontong 20', discount: 20 },
+  { code: 'Toko Kelontong 5', discount: 5 },
+  { code: 'Toko Kelontong 10', discount: 10 },
+  { code: 'Toko Kelontong 75', discount: 75 },
+  { code: 'Toko Kelontong 25', discount: 25 }
+]
+
+const promoSearch = ref('')
+const showPromoList = ref(false)
+const appliedPromo = ref(null) // { code, discount }
+let promoBlurTimeout = null
+
+// ---------------------------------------------------------------
+// POSISI DROPDOWN PROMO (FIX: biar ga kepotong overflow:hidden modal)
+// ---------------------------------------------------------------
+// Sebelumnya dropdown ini `position: absolute` relatif ke input, dan
+// hidup di dalam `.cart-modal` yang punya `overflow: hidden`. Begitu
+// tinggi dropdown melebihi sisa ruang modal, bagian bawahnya ke-clip.
+//
+// Fix-nya: dropdown di-Teleport ke <body> (lihat bagian <template>),
+// jadi dia lepas dari batas overflow modal, lalu posisinya dihitung
+// manual pakai getBoundingClientRect() supaya tetap nempel pas di
+// bawah input. Kalau ruang di bawah kurang, otomatis dibuka ke ATAS
+// (flip), mirip perilaku native <select> di browser.
+const promoInputWrapperRef = ref(null)
+const dropdownStyle = ref({})
+
+const updateDropdownPosition = () => {
+  const el = promoInputWrapperRef.value
+  if (!el) return
+
+  const rect = el.getBoundingClientRect()
+  const viewportHeight = window.innerHeight
+  const gap = 8
+  const minSpace = 160
+
+  const spaceBelow = viewportHeight - rect.bottom - gap
+  const spaceAbove = rect.top - gap
+  const openUpward = spaceBelow < minSpace && spaceAbove > spaceBelow
+
+  if (openUpward) {
+    dropdownStyle.value = {
+      position: 'fixed',
+      left: `${rect.left}px`,
+      width: `${rect.width}px`,
+      top: 'auto',
+      bottom: `${viewportHeight - rect.top + gap}px`,
+      maxHeight: `${Math.max(Math.min(240, spaceAbove), 120)}px`
+    }
+  } else {
+    dropdownStyle.value = {
+      position: 'fixed',
+      left: `${rect.left}px`,
+      width: `${rect.width}px`,
+      top: `${rect.bottom + gap}px`,
+      bottom: 'auto',
+      maxHeight: `${Math.max(Math.min(240, spaceBelow), 120)}px`
+    }
+  }
+}
+
+// Dipanggil ulang tiap resize/scroll SELAMA dropdown terbuka
+const handleReposition = () => {
+  if (showPromoList.value) updateDropdownPosition()
+}
+
+// Filter kode promo berdasarkan yang diketik user (search-as-you-type)
+const filteredPromoCodes = computed(() => {
+  const q = promoSearch.value.trim().toLowerCase()
+  if (!q) return promoCodes
+  return promoCodes.filter((p) => p.code.toLowerCase().includes(q))
+})
+
+// Nominal potongan berdasarkan promo yang aktif
+const discountAmount = computed(() => {
+  if (!appliedPromo.value) return 0
+  return Math.round((cartStore.totalPrice * appliedPromo.value.discount) / 100)
+})
+
+// Total akhir setelah dipotong promo (ini yang dipakai buat checkout)
+const finalTotal = computed(() => {
+  return Math.max(cartStore.totalPrice - discountAmount.value, 0)
+})
+
+const openPromoList = () => {
+  if (appliedPromo.value) return
+  showPromoList.value = true
+  // nextTick: pastikan elemen sudah ke-render sebelum diukur posisinya
+  nextTick(updateDropdownPosition)
+}
+
+// Delay dikit sebelum nutup dropdown, biar sempat kena klik dulu
+const onPromoBlur = () => {
+  promoBlurTimeout = setTimeout(() => {
+    showPromoList.value = false
+  }, 150)
+}
+
+const selectPromo = (promo) => {
+  if (promoBlurTimeout) clearTimeout(promoBlurTimeout)
+  appliedPromo.value = promo
+  promoSearch.value = promo.code
+  showPromoList.value = false
+}
+
+const applyPromoManual = () => {
+  const q = promoSearch.value.trim().toLowerCase()
+  if (!q) return
+  const found = promoCodes.find((p) => p.code.toLowerCase() === q)
+  if (found) {
+    appliedPromo.value = found
+    showPromoList.value = false
+  } else {
+    alert('Kode promo tidak ditemukan. Coba cek daftar kode di bawah kolom.')
+  }
+}
+
+const removePromo = () => {
+  appliedPromo.value = null
+  promoSearch.value = ''
+}
+
+// Reset promo tiap keranjang kosong (misal setelah checkout / dikosongkan manual)
+watch(
+  () => cartStore.items.length,
+  (len) => {
+    if (len === 0) removePromo()
+  }
+)
+// =======================================================
+
 // ================= FUNGSI CHECKOUT MIDTRANS =================
 const handleCheckout = async () => {
   if (cartStore.items.length === 0) return
@@ -87,14 +222,25 @@ const handleCheckout = async () => {
 
   try {
     const orderId = 'ORDER-' + new Date().getTime()
-    const grossAmount = cartStore.totalPrice
+    const grossAmount = finalTotal.value
 
-    const itemDetails = cartStore.items.map(item => ({
+    const itemDetails = cartStore.items.map((item) => ({
       id: item.id.toString(),
       price: item.price,
       quantity: item.qty,
       name: item.title.substring(0, 50)
     }))
+
+    // Kalau ada promo aktif, tambahin sebagai baris diskon (nominal negatif)
+    // supaya total item_details tetap sama dengan gross_amount di Midtrans
+    if (appliedPromo.value && discountAmount.value > 0) {
+      itemDetails.push({
+        id: 'DISCOUNT',
+        price: -discountAmount.value,
+        quantity: 1,
+        name: `Diskon ${appliedPromo.value.code} (${appliedPromo.value.discount}%)`.substring(0, 50)
+      })
+    }
 
     const payload = {
       transaction_details: {
@@ -119,32 +265,36 @@ const handleCheckout = async () => {
       // ✅ SIMPAN ORDER KE STORE DULU SEBELUM POPUP DIBUKA
       orderStore.addOrder({
         id: orderId,
-        snapToken: data.token,  // simpan token buat bayar nanti
-        items: cartStore.items.map(item => ({ ...item })),
+        snapToken: data.token, // simpan token buat bayar nanti
+        items: cartStore.items.map((item) => ({ ...item })),
+        promoCode: appliedPromo.value?.code ?? null,
+        discountPercent: appliedPromo.value?.discount ?? 0,
+        discountAmount: discountAmount.value,
         totalPrice: grossAmount,
         status: 'pending'
       })
 
-      // Kosongkan keranjang setelah order dibuat
+      // Kosongkan keranjang & promo setelah order dibuat
       cartStore.clearCart?.()
+      removePromo()
 
       closeCart()
 
       // Buka popup Midtrans
       window.snap.pay(data.token, {
-        onSuccess: function(result) {
+        onSuccess: function (result) {
           console.log('Success!', result)
           orderStore.updateOrderStatus(orderId, 'success')
         },
-        onPending: function(result) {
+        onPending: function (result) {
           console.log('Pending', result)
           orderStore.updateOrderStatus(orderId, 'pending')
         },
-        onError: function(result) {
+        onError: function (result) {
           console.log('Error', result)
           orderStore.updateOrderStatus(orderId, 'failed')
         },
-        onClose: function() {
+        onClose: function () {
           console.log('Popup ditutup, order disimpan sebagai pending')
         }
       })
@@ -161,21 +311,45 @@ const handleCheckout = async () => {
 }
 // ============================================================
 
+// Penting: base.css kasih `overflow-x: hidden` eksplisit di elemen <html>.
+// Begitu <html> punya overflow yang di-set eksplisit, DIA yang jadi
+// "scrolling element" halaman (bukan <body> lagi) — sesuai aturan CSSOM.
+// Makanya kalau cuma document.body.style.overflow yang dikunci, halaman
+// di belakang popup tetap bisa discroll karena <html>-nya nggak ikut dikunci.
+// Fix: kunci overflow di document.documentElement (html) DAN body.
+const lockBodyScroll = (lock) => {
+  const value = lock ? 'hidden' : ''
+  document.documentElement.style.overflow = value
+  document.body.style.overflow = value
+}
+
 watch(isMenuOpen, (open) => {
-  document.body.style.overflow = open ? 'hidden' : ''
+  lockBodyScroll(open || isCartOpen.value)
 })
 
 watch(isCartOpen, (open) => {
-  document.body.style.overflow = open ? 'hidden' : ''
+  lockBodyScroll(open || isMenuOpen.value)
+  if (!open) showPromoList.value = false
 })
 
 onMounted(() => {
   window.addEventListener('scroll', handleScroll)
+  // Reposisi dropdown promo kalau window di-resize atau ada elemen
+  // yang discroll (capture:true supaya kebaca scroll dari container
+  // manapun, termasuk .cart-items-list)
+  window.addEventListener('resize', handleReposition)
+  window.addEventListener('scroll', handleReposition, true)
+  // Reposisi juga saat keyboard hp muncul/hilang (mengubah visualViewport)
+  window.visualViewport?.addEventListener('resize', handleReposition)
 })
 
 onUnmounted(() => {
   window.removeEventListener('scroll', handleScroll)
-  document.body.style.overflow = ''
+  window.removeEventListener('resize', handleReposition)
+  window.removeEventListener('scroll', handleReposition, true)
+  window.visualViewport?.removeEventListener('resize', handleReposition)
+  lockBodyScroll(false)
+  if (promoBlurTimeout) clearTimeout(promoBlurTimeout)
 })
 </script>
 
@@ -282,6 +456,8 @@ onUnmounted(() => {
           </button>
         </div>
 
+        <div class="receipt-tear receipt-tear--flip" aria-hidden="true"></div>
+
         <div v-if="cartStore.items.length === 0" class="cart-empty">
           <svg xmlns="http://www.w3.org/2000/svg" width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="#d1d5db" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
             <circle cx="9" cy="21" r="1"></circle>
@@ -333,11 +509,68 @@ onUnmounted(() => {
             </div>
           </div>
 
+          <div class="receipt-tear" aria-hidden="true"></div>
+
           <div class="cart-summary">
+            <!-- ===== KODE PROMO ===== -->
+            <div class="promo-section">
+              <div class="promo-label-row">
+                <span class="promo-label-line" aria-hidden="true"></span>
+                <label class="promo-label" for="promo-input">Kode Promo</label>
+                <span class="promo-label-line" aria-hidden="true"></span>
+              </div>
+              <div class="promo-input-wrapper" ref="promoInputWrapperRef">
+                <input
+                  id="promo-input"
+                  type="text"
+                  v-model="promoSearch"
+                  @focus="openPromoList"
+                  @input="openPromoList"
+                  @blur="onPromoBlur"
+                  @keyup.enter="applyPromoManual"
+                  placeholder="Cari / masukkan kode promo..."
+                  class="promo-input"
+                  :disabled="!!appliedPromo"
+                  autocomplete="off"
+                />
+                <button
+                  v-if="!appliedPromo"
+                  type="button"
+                  class="btn-apply-promo"
+                  @click="applyPromoManual"
+                >
+                  Pakai
+                </button>
+                <button
+                  v-else
+                  type="button"
+                  class="btn-remove-promo"
+                  @click="removePromo"
+                >
+                  Hapus
+                </button>
+              </div>
+
+              <div v-if="appliedPromo" class="promo-stamp">
+                <span class="promo-stamp-title">Promo Terpakai</span>
+                <span class="promo-stamp-code">{{ appliedPromo.code }} · −{{ appliedPromo.discount }}%</span>
+              </div>
+            </div>
+            <!-- ===== END KODE PROMO ===== -->
+
+            <div v-if="appliedPromo" class="cart-discount-row">
+              <span>Diskon ({{ appliedPromo.discount }}%)</span>
+              <span class="discount-value">-{{ formatRupiah(discountAmount) }}</span>
+            </div>
+
             <div class="cart-total-row">
               <span>Total Harga</span>
-              <strong>{{ formatRupiah(cartStore.totalPrice) }}</strong>
+              <div class="total-price-wrapper">
+                <span v-if="appliedPromo" class="original-price">{{ formatRupiah(cartStore.totalPrice) }}</span>
+                <strong>{{ formatRupiah(finalTotal) }}</strong>
+              </div>
             </div>
+
             <button class="btn-checkout" @click="handleCheckout" :disabled="isCheckingOut">
               <span v-if="isCheckingOut">Memproses...</span>
               <span v-else>Checkout Sekarang</span>
@@ -346,6 +579,39 @@ onUnmounted(() => {
         </div>
       </div>
     </transition>
+  </Teleport>
+
+  <!-- ===================================================================
+       Dropdown kode promo di-Teleport terpisah ke <body>.
+       FIX: sebelumnya dropdown ini nempel di dalam .cart-modal yang
+       overflow:hidden, jadi kepotong. Sekarang dia lepas dari situ dan
+       posisinya dihitung manual via dropdownStyle (lihat script), jadi
+       selalu full terlihat + auto flip ke atas kalau ruang bawah sempit.
+  =================================================================== -->
+  <Teleport to="body">
+    <ul
+      v-if="showPromoList && !appliedPromo && filteredPromoCodes.length"
+      class="promo-dropdown"
+      :style="dropdownStyle"
+    >
+      <li
+        v-for="promo in filteredPromoCodes"
+        :key="promo.code"
+        class="promo-dropdown-item"
+        @mousedown.prevent="selectPromo(promo)"
+      >
+        <span class="promo-code-text">{{ promo.code }}</span>
+        <span class="promo-discount-badge">-{{ promo.discount }}%</span>
+      </li>
+    </ul>
+
+    <div
+      v-else-if="showPromoList && !appliedPromo && promoSearch && !filteredPromoCodes.length"
+      class="promo-dropdown"
+      :style="dropdownStyle"
+    >
+      <div class="promo-empty">Kode tidak ditemukan</div>
+    </div>
   </Teleport>
 </template>
 
@@ -537,7 +803,7 @@ onUnmounted(() => {
   left: 0;
   width: 100%;
   height: 100vh;
-  background-color: rgba(15, 23, 42, 0.45);
+  background-color: rgba(37, 30, 21, 0.45);
   z-index: 90;
 }
 
@@ -660,7 +926,31 @@ onUnmounted(() => {
 </style>
 
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@500;600;700&display=swap');
+
+/*
+  KONSEP: "Struk Belanja Kelontong"
+  Modal keranjang dibuat kayak nota/struk kasir toko kelontong beneran:
+  ada bagian kepala & "sobekan" kertas, angka-angka pakai font monospace
+  (kayak kertas struk), dan kode promo yang dipakai muncul sebagai
+  stempel tinta yang dimiringkan — bukan badge ceklis hijau generik.
+*/
+
+/* FIX: variabel warna dipindah ke :root (bukan cuma di .cart-modal) supaya
+   tetap kebaca sama .promo-dropdown yang sekarang di-Teleport ke <body>
+   (di luar subtree .cart-modal — custom property CSS ikut hierarki DOM). */
+:root {
+  --kk-paper: #fbf3e2;
+  --kk-stub: #f1e3bf;
+  --kk-ink: #2b2418;
+  --kk-ink-soft: #8a7d64;
+  --kk-line: #e2d2a9;
+  --kk-mustard: #b9801e;
+  --kk-mustard-dark: #8f6116;
+  --kk-mustard-soft: #f1dfae;
+  --kk-stamp: #a8442f;
+  --kk-stamp-soft: #f3ddd3;
+}
 
 /* ===================== CART MODAL ===================== */
 .cart-overlay {
@@ -669,25 +959,26 @@ onUnmounted(() => {
   left: 0;
   width: 100%;
   height: 100vh;
-  background-color: rgba(15, 23, 42, 0.55);
+  background-color: rgba(37, 30, 21, 0.55);
   z-index: 200;
 }
 
 .cart-modal {
   font-family: 'Plus Jakarta Sans', sans-serif;
+  color: var(--kk-ink);
   position: fixed;
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  background-color: #ffffff;
-  border-radius: 1.5rem;
+  background-color: var(--kk-paper);
+  border-radius: 0.85rem;
   width: 92%;
-  max-width: 480px;
+  max-width: 460px;
   max-height: 85vh;
   display: flex;
   flex-direction: column;
   z-index: 201;
-  box-shadow: 0 24px 60px -10px rgba(0, 0, 0, 0.35);
+  box-shadow: 0 24px 60px -12px rgba(43, 36, 24, 0.45);
   overflow: hidden;
 }
 
@@ -705,36 +996,62 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 1.25rem 1.5rem;
-  border-bottom: 1px solid #f1f5f9;
+  padding: 1.15rem 1.5rem;
+  background-color: var(--kk-stub);
   flex-shrink: 0;
 }
 
 .cart-modal-header h3 {
-  font-size: 1.15rem;
+  font-size: 1rem;
   font-weight: 800;
-  color: #111827;
+  color: var(--kk-ink);
   margin: 0;
-  letter-spacing: -0.02em;
+  letter-spacing: 0.01em;
+}
+
+.cart-modal-header h3::before {
+  content: 'NOTA · ';
+  font-family: 'IBM Plex Mono', monospace;
+  font-weight: 600;
+  font-size: 0.7rem;
+  color: var(--kk-mustard-dark);
+  letter-spacing: 0.08em;
+}
+
+/* "Sobekan" kertas struk — pemisah antar bagian, bukan garis polos */
+.receipt-tear {
+  height: 12px;
+  flex-shrink: 0;
+  background-color: var(--kk-stub);
+  background-image:
+    linear-gradient(-45deg, var(--kk-paper) 6px, transparent 0),
+    linear-gradient(45deg, var(--kk-paper) 6px, transparent 0);
+  background-position: left top;
+  background-size: 12px 12px;
+  background-repeat: repeat-x;
+}
+
+.receipt-tear--flip {
+  transform: scaleY(-1);
 }
 
 .btn-close-cart {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 34px;
-  height: 34px;
+  width: 30px;
+  height: 30px;
   border-radius: 50%;
-  background-color: #f3f4f6;
-  border: none;
-  color: #4b5563;
+  background-color: transparent;
+  border: 1.5px solid var(--kk-ink-soft);
+  color: var(--kk-ink-soft);
   cursor: pointer;
-  transition: background-color 0.2s, color 0.2s, transform 0.2s;
+  transition: border-color 0.2s, color 0.2s, transform 0.2s;
 }
 
 .btn-close-cart:hover {
-  background-color: #fee2e2;
-  color: #ef4444;
+  border-color: var(--kk-stamp);
+  color: var(--kk-stamp);
   transform: rotate(90deg);
 }
 
@@ -749,27 +1066,28 @@ onUnmounted(() => {
 }
 
 .cart-empty p {
-  color: #6b7280;
+  color: var(--kk-ink-soft);
   font-size: 0.92rem;
   margin: 0;
 }
 
 .btn-shop-now {
-  background: linear-gradient(135deg, #eab308, #ca8a04);
-  color: #ffffff;
+  background-color: var(--kk-mustard);
+  color: #fffaf0;
   border: none;
   padding: 0.7rem 1.6rem;
-  border-radius: 9999px;
+  border-radius: 8px;
   font-weight: 700;
   font-size: 0.85rem;
   font-family: 'Plus Jakarta Sans', sans-serif;
   cursor: pointer;
   transition: all 0.2s ease;
-  box-shadow: 0 4px 14px rgba(234,179,8,0.32);
+  box-shadow: inset 0 -3px 0 rgba(0, 0, 0, 0.15);
 }
 
 .btn-shop-now:hover {
-  transform: translateY(-2px);
+  background-color: var(--kk-mustard-dark);
+  transform: translateY(-1px);
 }
 
 .cart-body {
@@ -781,11 +1099,13 @@ onUnmounted(() => {
 
 .cart-items-list {
   overflow-y: auto;
-  padding: 1rem 1.5rem;
+  overscroll-behavior: contain;
+  padding: 1.1rem 1.5rem;
   display: flex;
   flex-direction: column;
   gap: 1rem;
   flex: 1;
+  background-color: var(--kk-paper);
 }
 
 .cart-item {
@@ -793,7 +1113,7 @@ onUnmounted(() => {
   align-items: flex-start;
   gap: 0.85rem;
   padding-bottom: 1rem;
-  border-bottom: 1px solid #f1f5f9;
+  border-bottom: 1px dashed var(--kk-line);
 }
 
 .cart-item:last-child {
@@ -802,12 +1122,13 @@ onUnmounted(() => {
 }
 
 .cart-item-image {
-  width: 64px;
-  height: 64px;
+  width: 60px;
+  height: 60px;
   object-fit: cover;
-  border-radius: 0.75rem;
+  border-radius: 6px;
   flex-shrink: 0;
-  background-color: #fef9c3;
+  background-color: var(--kk-mustard-soft);
+  border: 1px solid var(--kk-line);
 }
 
 .cart-item-info {
@@ -821,7 +1142,7 @@ onUnmounted(() => {
 .cart-item-title {
   font-size: 0.85rem;
   font-weight: 700;
-  color: #111827;
+  color: var(--kk-ink);
   margin: 0;
   line-height: 1.3;
   display: -webkit-box;
@@ -832,9 +1153,10 @@ onUnmounted(() => {
 }
 
 .cart-item-price {
-  font-size: 0.78rem;
-  color: #ca8a04;
-  font-weight: 700;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.74rem;
+  color: var(--kk-mustard-dark);
+  font-weight: 600;
   margin: 0;
 }
 
@@ -848,44 +1170,45 @@ onUnmounted(() => {
 .qty-control-cart {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  background-color: #fef9c3;
-  border-radius: 0.6rem;
+  gap: 0.4rem;
+  background-color: var(--kk-mustard-soft);
+  border-radius: 6px;
   padding: 0.2rem;
 }
 
 .btn-qty-cart {
-  background-color: #ffffff;
-  border: none;
-  color: #ca8a04;
-  width: 22px;
-  height: 22px;
-  border-radius: 0.4rem;
+  background-color: var(--kk-paper);
+  border: 1px solid var(--kk-line);
+  color: var(--kk-mustard-dark);
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: background-color 0.2s ease;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+  transition: background-color 0.2s ease, color 0.2s ease;
 }
 
 .btn-qty-cart:hover {
-  background-color: #eab308;
-  color: #ffffff;
+  background-color: var(--kk-mustard);
+  border-color: var(--kk-mustard);
+  color: #fffaf0;
 }
 
 .qty-value-cart {
-  font-size: 0.8rem;
-  font-weight: 800;
-  color: #92400e;
-  min-width: 16px;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--kk-ink);
+  min-width: 14px;
   text-align: center;
 }
 
 .btn-remove-item {
   background: none;
   border: none;
-  color: #d1d5db;
+  color: var(--kk-line);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -895,67 +1218,327 @@ onUnmounted(() => {
 }
 
 .btn-remove-item:hover {
-  color: #ef4444;
+  color: var(--kk-stamp);
 }
 
 .cart-item-subtotal {
-  font-size: 0.82rem;
-  font-weight: 800;
-  color: #111827;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--kk-ink);
   margin: 0;
   flex-shrink: 0;
   white-space: nowrap;
 }
 
 .cart-summary {
-  border-top: 1px solid #f1f5f9;
-  padding: 1.25rem 1.5rem 1.5rem;
+  position: relative;
+  padding: 1.1rem 1.5rem 1.4rem;
   flex-shrink: 0;
-  background-color: #fafafa;
+  background-color: var(--kk-stub);
 }
+
+/* ===================== KODE PROMO ===================== */
+.promo-section {
+  margin-bottom: 0.9rem;
+  position: relative;
+}
+
+.promo-label-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 0.55rem;
+}
+
+.promo-label-line {
+  flex: 1;
+  height: 1px;
+  background-image: repeating-linear-gradient(
+    to right,
+    var(--kk-ink-soft) 0,
+    var(--kk-ink-soft) 4px,
+    transparent 4px,
+    transparent 8px
+  );
+  opacity: 0.55;
+}
+
+.promo-label {
+  display: block;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--kk-ink-soft);
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  white-space: nowrap;
+}
+
+.promo-input-wrapper {
+  position: relative;
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.35rem;
+  border: 1.5px dashed var(--kk-mustard);
+  border-radius: 10px;
+}
+
+.promo-input-wrapper::before,
+.promo-input-wrapper::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  width: 13px;
+  height: 13px;
+  background-color: var(--kk-stub);
+  border-radius: 50%;
+  transform: translateY(-50%);
+  box-shadow: inset 0 0 0 1.5px var(--kk-mustard);
+}
+.promo-input-wrapper::before { left: -7px; }
+.promo-input-wrapper::after { right: -7px; }
+
+.promo-input {
+  flex: 1;
+  min-width: 0;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid var(--kk-line);
+  border-radius: 6px;
+  background-color: var(--kk-paper);
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-size: 0.83rem;
+  color: var(--kk-ink);
+  outline: none;
+  transition: border-color 0.2s ease;
+}
+
+.promo-input::placeholder {
+  color: var(--kk-ink-soft);
+}
+
+.promo-input:focus {
+  border-color: var(--kk-mustard);
+}
+
+.promo-input:disabled {
+  background-color: var(--kk-mustard-soft);
+  color: var(--kk-mustard-dark);
+  font-family: 'IBM Plex Mono', monospace;
+  font-weight: 600;
+  border-color: var(--kk-mustard);
+}
+
+.btn-apply-promo,
+.btn-remove-promo {
+  flex-shrink: 0;
+  border: none;
+  border-radius: 6px;
+  padding: 0 1rem;
+  font-weight: 700;
+  font-size: 0.8rem;
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-apply-promo {
+  background-color: var(--kk-ink);
+  color: var(--kk-paper);
+}
+
+.btn-apply-promo:hover {
+  background-color: var(--kk-mustard);
+  color: var(--kk-ink);
+}
+
+.btn-remove-promo {
+  background-color: var(--kk-stamp-soft);
+  color: var(--kk-stamp);
+}
+
+.btn-remove-promo:hover {
+  background-color: var(--kk-stamp);
+  color: #fffaf0;
+}
+
+/* FIX: dropdown sekarang di-Teleport ke <body> dan diposisikan via
+   `position: fixed` yang nilai top/left/width/bottom/max-height-nya
+   dihitung dinamis lewat JS (lihat dropdownStyle). Class ini cuma
+   nyediain tampilannya, posisinya sepenuhnya datang dari :style. */
+.promo-dropdown {
+  position: fixed;
+  background-color: var(--kk-paper);
+  border: 1px solid var(--kk-line);
+  border-radius: 8px;
+  box-shadow: 0 16px 36px -8px rgba(43, 36, 24, 0.35);
+  z-index: 500;
+  max-height: 240px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.promo-dropdown-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.6rem 0.85rem;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+  font-size: 0.83rem;
+}
+
+.promo-dropdown-item:hover {
+  background-color: var(--kk-mustard-soft);
+}
+
+.promo-dropdown-item + .promo-dropdown-item {
+  border-top: 1px dashed var(--kk-line);
+}
+
+.promo-code-text {
+  font-weight: 600;
+  color: var(--kk-ink);
+}
+
+.promo-discount-badge {
+  background-color: transparent;
+  color: var(--kk-stamp);
+  font-family: 'IBM Plex Mono', monospace;
+  font-weight: 700;
+  font-size: 0.7rem;
+  padding: 0.15rem 0.45rem;
+  border: 1px dashed var(--kk-stamp);
+  border-radius: 4px;
+}
+
+.promo-empty {
+  padding: 0.75rem 0.9rem;
+  font-size: 0.82rem;
+  color: var(--kk-ink-soft);
+  text-align: center;
+}
+
+/* Stempel tinta untuk promo yang lagi aktif */
+.promo-stamp {
+  margin-top: 0.75rem;
+  display: inline-flex;
+  flex-direction: column;
+  gap: 0.05rem;
+  padding: 0.4rem 0.85rem;
+  border: 2px solid var(--kk-stamp);
+  border-radius: 6px;
+  color: var(--kk-stamp);
+  transform: rotate(-3deg);
+  position: relative;
+}
+
+.promo-stamp::after {
+  content: '';
+  position: absolute;
+  inset: 3px;
+  border: 1px solid var(--kk-stamp);
+  border-radius: 3px;
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+.promo-stamp-title {
+  font-family: 'IBM Plex Mono', monospace;
+  font-weight: 700;
+  font-size: 0.65rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.promo-stamp-code {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.68rem;
+  opacity: 0.85;
+}
+
+.cart-discount-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.6rem;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.78rem;
+  color: var(--kk-stamp);
+  font-weight: 600;
+}
+
+.discount-value {
+  font-weight: 700;
+}
+/* =================== END KODE PROMO =================== */
 
 .cart-total-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 1rem;
-  font-size: 0.95rem;
-  color: #374151;
+  margin-bottom: 1.1rem;
+  padding-top: 0.75rem;
+  border-top: 1.5px dashed var(--kk-ink-soft);
+  font-size: 0.7rem;
+  color: var(--kk-ink-soft);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.total-price-wrapper {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+
+.original-price {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.78rem;
+  color: var(--kk-ink-soft);
+  text-decoration: line-through;
   font-weight: 600;
 }
 
 .cart-total-row strong {
-  font-size: 1.2rem;
-  color: #ca8a04;
-  font-weight: 800;
-  letter-spacing: -0.02em;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 1.25rem;
+  color: var(--kk-ink);
+  font-weight: 700;
+  letter-spacing: -0.01em;
 }
 
 .btn-checkout {
   width: 100%;
-  background: linear-gradient(135deg, #eab308, #ca8a04);
-  color: #ffffff;
+  background-color: var(--kk-mustard);
+  color: #fffaf0;
   border: none;
   padding: 0.9rem 1.5rem;
-  border-radius: 9999px;
+  border-radius: 10px;
   font-weight: 700;
   font-size: 0.95rem;
   font-family: 'Plus Jakarta Sans', sans-serif;
-  letter-spacing: -0.01em;
+  letter-spacing: 0.01em;
   cursor: pointer;
-  transition: all 0.25s ease;
-  box-shadow: 0 6px 16px rgba(234,179,8,0.35);
+  transition: all 0.15s ease;
+  box-shadow: inset 0 -4px 0 rgba(0, 0, 0, 0.16);
 }
 
 .btn-checkout:disabled {
-  opacity: 0.7;
+  opacity: 0.6;
   cursor: not-allowed;
   transform: none !important;
+  box-shadow: none !important;
 }
 
 .btn-checkout:hover:not(:disabled) {
-  transform: translateY(-2px);
-  box-shadow: 0 10px 24px rgba(234,179,8,0.45);
+  background-color: var(--kk-mustard-dark);
+}
+
+.btn-checkout:active:not(:disabled) {
+  transform: translateY(2px);
+  box-shadow: inset 0 -1px 0 rgba(0, 0, 0, 0.16);
 }
 
 /* fade-overlay transition (untuk cart-overlay yang di-teleport) */
@@ -972,7 +1555,7 @@ onUnmounted(() => {
   .cart-modal {
     width: 94%;
     max-height: 80vh;
-    border-radius: 1.25rem;
+    border-radius: 0.75rem;
   }
 
   .cart-modal-header {
@@ -980,20 +1563,24 @@ onUnmounted(() => {
   }
 
   .cart-items-list {
-    padding: 0.85rem 1.1rem;
+    padding: 0.9rem 1.1rem;
+  }
+
+  .cart-summary {
+    padding: 1rem 1.1rem 1.25rem;
   }
 
   .cart-item-image {
-    width: 54px;
-    height: 54px;
+    width: 52px;
+    height: 52px;
   }
 
   .cart-item-title {
     font-size: 0.8rem;
   }
 
-  .cart-summary {
-    padding: 1rem 1.1rem 1.25rem;
+  .promo-input-wrapper {
+    flex-wrap: wrap;
   }
 }
 </style>

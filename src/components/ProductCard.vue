@@ -1,5 +1,5 @@
 <script setup>
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useFilterStore } from '../stores/useFilterStore'
 import { useCartStore } from '../stores/useCartStore'
 
@@ -16,6 +16,23 @@ const props = defineProps({
 // Qty produk ini di keranjang. Kalau 0 -> tampilkan tombol "Keranjang".
 // Kalau > 0 -> tampilkan kontrol - qty +.
 const qty = computed(() => cartStore.getQty(props.product.id))
+
+// Kalau gambar produk gagal dimuat (404/rusak), tampilkan placeholder
+// abu-abu polos tanpa ikon/teks broken-image bawaan browser.
+const imageError = ref(false)
+
+// Reset status error kalau url gambar produk berubah (misal card di-reuse
+// buat produk lain lewat v-for + key yang sama)
+watch(
+  () => props.product.image,
+  () => {
+    imageError.value = false
+  }
+)
+
+const handleImageError = () => {
+  imageError.value = true
+}
 
 const formatRupiah = (price) => {
   return new Intl.NumberFormat('id-ID', {
@@ -48,7 +65,14 @@ const handleDecrement = () => {
 <template>
   <div class="product-card">
     <div class="product-image-container">
-      <img :src="product.image" :alt="product.title" class="product-image" />
+      <img
+        v-if="!imageError"
+        :src="product.image"
+        :alt="product.title"
+        class="product-image"
+        @error="handleImageError"
+      />
+      <div v-else class="product-image-placeholder"></div>
 
       <div class="badge-discount" v-if="product.discount">-{{ product.discount }}%</div>
 
@@ -229,6 +253,14 @@ const handleDecrement = () => {
 
 .product-card:hover .product-image {
   transform: scale(1.07);
+}
+
+/* Placeholder abu-abu polos, dipakai kalau gambar produk gagal dimuat */
+.product-image-placeholder {
+  width: 100%;
+  height: 100%;
+  border-radius: 0.6rem;
+  background-color: #e5e7eb;
 }
 
 .badge-discount {

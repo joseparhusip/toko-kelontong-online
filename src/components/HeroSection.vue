@@ -55,10 +55,6 @@ const nextSlide = () => {
   currentIndex.value = (currentIndex.value + 1) % banners.value.length
 }
 
-const prevSlide = () => {
-  currentIndex.value = (currentIndex.value - 1 + banners.value.length) % banners.value.length
-}
-
 const goToSlide = (index) => {
   currentIndex.value = index
 }
@@ -119,9 +115,6 @@ onUnmounted(() => {
         </div>
       </div>
     </div>
-
-    <button class="nav-btn left" @click="prevSlide">&#10094;</button>
-    <button class="nav-btn right" @click="nextSlide">&#10095;</button>
 
     <div class="pagination-dots">
       <button
@@ -369,35 +362,6 @@ onUnmounted(() => {
   transform: translateY(-2px);
 }
 
-.nav-btn {
-  position: absolute;
-  top: 50%;
-  transform: translateY(-50%);
-  background-color: rgba(255, 255, 255, 0.9);
-  border: none;
-  width: 48px;
-  height: 48px;
-  border-radius: 50%;
-  font-size: 1.25rem;
-  color: #111827;
-  cursor: pointer;
-  box-shadow: 0 8px 20px -3px rgba(0, 0, 0, 0.12);
-  transition: all 0.2s;
-  z-index: 10;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  backdrop-filter: blur(6px);
-}
-
-.nav-btn:hover {
-  background-color: #ffffff;
-  transform: translateY(-50%) scale(1.1);
-}
-
-.nav-btn.left { left: 3%; }
-.nav-btn.right { right: 3%; }
-
 .pagination-dots {
   position: absolute;
   bottom: 1.75rem;
@@ -464,12 +428,6 @@ onUnmounted(() => {
     max-width: 420px;
     margin-top: 40px;
   }
-
-  .nav-btn {
-    width: 40px;
-    height: 40px;
-    font-size: 1rem;
-  }
 }
 
 /* ===== MOBILE ===== */
@@ -534,15 +492,6 @@ onUnmounted(() => {
   .normal-img {
     transform: scale(1.05) translateY(30px);
   }
-
-  .nav-btn {
-    width: 34px;
-    height: 34px;
-    font-size: 0.85rem;
-  }
-
-  .nav-btn.left { left: 2%; }
-  .nav-btn.right { right: 2%; }
 
   .pagination-dots {
     bottom: 1rem;
