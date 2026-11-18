@@ -66,7 +66,9 @@ watch(
         <button aria-label="Kurangi" @click="cartStore.decrement(product.id)">
           <AppIcon name="minus" :size="16" :stroke="2" />
         </button>
-        <span class="num" aria-live="polite">{{ qty }} di keranjang</span>
+        <span class="qty num" aria-live="polite">
+          {{ qty }}<span class="sr-only"> di keranjang</span>
+        </span>
         <button aria-label="Tambah" @click="cartStore.increment(product.id)">
           <AppIcon name="plus" :size="16" :stroke="2" />
         </button>
@@ -250,30 +252,37 @@ watch(
   color: #fff;
 }
 
+/* Stepper simetris: [−] angka [+] — dua tombol sama besar, angka tepat di tengah */
 .stepper {
-  display: flex;
+  display: grid;
+  grid-template-columns: 32px 1fr 32px;
   align-items: center;
-  justify-content: space-between;
+  padding: 3px;
   background: var(--brand);
   color: #fff;
 }
 
 .stepper button {
-  width: 38px;
-  height: 100%;
+  width: 32px;
+  height: 32px;
   display: grid;
   place-items: center;
   color: #fff;
-  border-radius: 10px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.14);
+  transition: background-color var(--dur) var(--ease);
 }
 
 .stepper button:hover {
-  background: var(--brand-strong);
+  background: rgba(255, 255, 255, 0.26);
 }
 
-.stepper span {
-  font-size: 13px;
-  font-weight: 600;
+.stepper .qty {
+  text-align: center;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
 }
 
 @media (max-width: 639px) {
@@ -282,12 +291,6 @@ watch(
   }
   .media img {
     max-height: calc(100cqw - 16px);
-  }
-}
-
-@media (max-width: 400px) {
-  .stepper span {
-    font-size: 12px;
   }
 }
 </style>
