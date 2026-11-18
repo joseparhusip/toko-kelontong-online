@@ -59,7 +59,13 @@ const router = createRouter({
       component: AboutView,
     },
   ],
-  scrollBehavior() {
+  scrollBehavior(to) {
+    if (to.hash) {
+      const headerOffset = window.innerWidth >= 768 ? 92 : 128
+      return new Promise((resolve) =>
+        setTimeout(() => resolve({ el: to.hash, top: headerOffset, behavior: 'smooth' }), 60),
+      )
+    }
     return { top: 0 }
   },
 })

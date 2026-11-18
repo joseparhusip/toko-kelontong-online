@@ -1,240 +1,121 @@
 <script setup>
-import { ref } from 'vue'
 import Navbar from '../components/Navbar.vue'
 import AppFooter from '../components/Footer.vue'
 import PageHeader from './PageHeader.vue'
+import HelpBox from './HelpBox.vue'
+import AppIcon from '../components/ui/AppIcon.vue'
 
-const groups = ref([
+const groups = [
   {
     label: 'Pemesanan',
     items: [
-      { q: 'Apakah ada minimum pembelian?', a: 'Tidak ada minimum pembelian. Namun untuk pengiriman gratis biasanya berlaku minimum transaksi tertentu sesuai promo yang sedang berjalan.', open: true },
-      { q: 'Bagaimana cara membatalkan pesanan?', a: 'Pesanan bisa dibatalkan selama masih berstatus "Menunggu Pembayaran" atau "Diproses" lewat halaman Riwayat Pesanan. Setelah dikirim, pembatalan tidak dapat dilakukan.', open: false }
-    ]
+      { q: 'Apakah ada minimum pembelian?', a: 'Tidak ada. Untuk promo tertentu bisa berlaku minimum transaksi, tertulis di detail promonya.' },
+      { q: 'Bagaimana cara membatalkan pesanan?', a: 'Pesanan yang belum dibayar bisa dibiarkan saja, nanti batal otomatis. Pesanan yang sudah dikirim tidak bisa dibatalkan.' },
+    ],
   },
   {
     label: 'Pembayaran',
     items: [
-      { q: 'Metode pembayaran apa saja yang tersedia?', a: 'Transfer bank, e-wallet (GoPay, OVO, Dana, ShopeePay), kartu debit/kredit, dan bayar di tempat (COD) untuk area tertentu.', open: false },
-      { q: 'Apakah data pembayaran saya aman?', a: 'Aman. Seluruh transaksi diproses melalui payment gateway berenkripsi, kami tidak menyimpan data kartu secara langsung.', open: false }
-    ]
+      { q: 'Metode pembayaran apa saja yang tersedia?', a: 'QRIS, transfer virtual account bank, e-wallet (GoPay, ShopeePay, dll), dan kartu debit/kredit.' },
+      { q: 'Apakah data pembayaran saya aman?', a: 'Aman. Pembayaran diproses oleh Midtrans, kami tidak menyimpan data kartu.' },
+    ],
   },
   {
     label: 'Pengiriman',
     items: [
-      { q: 'Berapa lama waktu pengiriman?', a: 'Rata-rata 1-3 jam untuk area dalam kota, dan 1-2 hari untuk luar kota, tergantung ketersediaan stok dan lokasi tujuan.', open: false },
-      { q: 'Bagaimana cara melacak pesanan?', a: 'Pantau status pesanan secara real-time melalui halaman "Riwayat Pesanan" setelah kamu login ke akun.', open: false }
-    ]
+      { q: 'Berapa lama pengirimannya?', a: 'Rata-rata 1–3 jam untuk dalam kota, dan 1–2 hari untuk luar kota.' },
+      { q: 'Bagaimana cara melacak pesanan?', a: 'Buka halaman Pesanan saya. Status setiap pesanan ada di sana.' },
+    ],
   },
   {
     label: 'Lainnya',
     items: [
-      { q: 'Barang yang diterima rusak, harus bagaimana?', a: 'Laporkan lewat halaman Hubungi Kami maksimal 1x24 jam setelah barang diterima, sertakan foto bukti untuk mempercepat proses klaim.', open: false },
-      { q: 'Bagaimana cara dapat info promo terbaru?', a: 'Daftarkan emailmu di kolom "Dapatkan Info Promo" pada bagian bawah halaman, promo terbaru akan langsung masuk ke inbox kamu.', open: false }
-    ]
-  }
-])
-
-const toggle = (g, i) => {
-  groups.value[g].items[i].open = !groups.value[g].items[i].open
-}
+      { q: 'Barang yang diterima rusak, harus bagaimana?', a: 'Laporkan lewat halaman Hubungi kami maksimal 1×24 jam setelah barang diterima, sertakan foto.' },
+      { q: 'Bagaimana cara dapat info promo?', a: 'Daftarkan email di kolom Info promo di bagian bawah halaman.' },
+    ],
+  },
+]
 </script>
 
 <template>
   <Navbar />
 
-  <PageHeader
-    eyebrow="Pusat Bantuan"
-    title="Pertanyaan Umum"
-    subtitle="Jawaban singkat untuk hal-hal yang paling sering ditanyakan pelanggan kami."
-  />
+  <main>
+    <PageHeader title="Pertanyaan umum" />
 
-  <section class="faq-section">
-    <div class="faq-group" v-for="(group, g) in groups" :key="g">
-      <h2 class="group-label">{{ group.label }}</h2>
+    <div class="container narrow body">
+      <section v-for="g in groups" :key="g.label" class="group">
+        <h2>{{ g.label }}</h2>
+        <details v-for="item in g.items" :key="item.q">
+          <summary>
+            {{ item.q }}
+            <AppIcon name="chevron-down" :size="18" />
+          </summary>
+          <p>{{ item.a }}</p>
+        </details>
+      </section>
 
-      <div class="faq-item" v-for="(item, i) in group.items" :key="i" :class="{ open: item.open }">
-        <button class="faq-question" @click="toggle(g, i)" :aria-expanded="item.open">
-          <span>{{ item.q }}</span>
-          <span class="toggle-icon">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path v-if="!item.open" d="M12 5v14"/></svg>
-          </span>
-        </button>
-        <transition name="expand">
-          <div class="faq-answer" v-show="item.open">
-            <p>{{ item.a }}</p>
-          </div>
-        </transition>
-      </div>
+      <HelpBox title="Tidak menemukan jawabannya?" />
     </div>
-
-    <div class="help-box">
-      <div class="help-text">
-        <h4>Tidak menemukan jawabanmu?</h4>
-        <p>Tim kami siap membantu menjawab pertanyaan lain seputar belanja.</p>
-      </div>
-      <RouterLink to="/hubungi-kami" class="help-btn">
-        Hubungi Kami
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5l7 7-7 7"/></svg>
-      </RouterLink>
-    </div>
-  </section>
+  </main>
 
   <AppFooter />
 </template>
 
 <style scoped>
-@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
-
-.faq-section {
-  font-family: 'Plus Jakarta Sans', sans-serif;
-  max-width: 760px;
-  margin: 0 auto;
-  padding: 4.5rem 5% 5.5rem;
-  background-color: #ffffff;
+.narrow {
+  max-width: calc(760px + var(--gutter) * 2);
 }
 
-.faq-group {
-  margin-bottom: 2.75rem;
+.body {
+  padding-top: 16px;
+  padding-bottom: 80px;
 }
 
-.faq-group:last-of-type {
-  margin-bottom: 0;
+.group + .group {
+  margin-top: 36px;
 }
 
-.group-label {
-  font-family: 'Fraunces', serif;
-  font-size: 1.15rem;
+.group h2 {
+  font-size: 13px;
   font-weight: 600;
-  color: #166534;
-  margin: 0 0 1.1rem;
-  padding-bottom: 0.6rem;
-  border-bottom: 1px solid #e7dfce;
+  color: var(--ink-3);
+  letter-spacing: 0;
+  margin-bottom: 4px;
 }
 
-.faq-item {
-  border-bottom: 1px solid #f1ede1;
+details {
+  border-bottom: 1px solid var(--line);
 }
 
-.faq-item:last-child {
-  border-bottom: none;
-}
-
-.faq-question {
-  width: 100%;
+summary {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 1rem;
-  padding: 1.1rem 0;
-  background: none;
-  border: none;
+  gap: 16px;
+  padding: 18px 0;
+  font-size: 16px;
+  font-weight: 600;
   cursor: pointer;
-  text-align: left;
-  font-family: 'Plus Jakarta Sans', sans-serif;
-  font-size: 0.95rem;
-  font-weight: 600;
-  color: #18130f;
+  list-style: none;
 }
 
-.faq-item.open .faq-question {
-  color: #92400e;
+summary::-webkit-details-marker {
+  display: none;
 }
 
-.toggle-icon {
-  flex-shrink: 0;
-  width: 26px;
-  height: 26px;
-  border-radius: 50%;
-  border: 1.5px solid #e7dfce;
-  color: #92400e;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: border-color 0.2s, background-color 0.2s;
+summary svg {
+  flex: 0 0 auto;
+  color: var(--ink-3);
+  transition: transform var(--dur) var(--ease);
 }
 
-.faq-item.open .toggle-icon {
-  background-color: #eab308;
-  border-color: #eab308;
-  color: #18130f;
+details[open] summary svg {
+  transform: rotate(180deg);
 }
 
-.faq-answer {
-  padding: 0 1.5rem 1.25rem 0;
-}
-
-.faq-answer p {
-  font-size: 0.9rem;
-  color: #57534e;
-  line-height: 1.75;
-  margin: 0;
-}
-
-.expand-enter-active,
-.expand-leave-active {
-  transition: all 0.2s ease;
-}
-
-.expand-enter-from,
-.expand-leave-to {
-  opacity: 0;
-}
-
-.help-box {
-  margin-top: 1rem;
-  background-color: #18130f;
-  background-image: radial-gradient(circle at 90% 10%, rgba(234,179,8,0.15), transparent 55%);
-  border-radius: 18px;
-  padding: 2.1rem 2.35rem;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 1.25rem;
-}
-
-.help-text h4 {
-  font-family: 'Fraunces', serif;
-  color: #ffffff;
-  font-size: 1.2rem;
-  font-weight: 600;
-  margin: 0 0 0.3rem;
-}
-
-.help-text p {
-  color: #a8a29e;
-  font-size: 0.88rem;
-  margin: 0;
-}
-
-.help-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  background-color: #eab308;
-  color: #18130f;
-  text-decoration: none;
-  font-weight: 700;
-  font-size: 0.88rem;
-  padding: 0.8rem 1.5rem;
-  border-radius: 10px;
-  white-space: nowrap;
-  transition: background-color 0.2s, transform 0.2s;
-}
-
-.help-btn:hover {
-  background-color: #fde047;
-  transform: translateX(2px);
-}
-
-@media (max-width: 576px) {
-  .faq-section {
-    padding: 3.5rem 6% 4rem;
-  }
-  .help-box {
-    flex-direction: column;
-    align-items: flex-start;
-  }
+details p {
+  padding: 0 32px 18px 0;
+  color: var(--ink-2);
 }
 </style>
